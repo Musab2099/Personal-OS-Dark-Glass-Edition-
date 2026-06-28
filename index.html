@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#02020C">
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./favicon-32.png" sizes="32x32">
@@ -965,7 +966,8 @@
       <div class="ring-info">
         <div class="ring-status-row">
           <div class="ring-status" id="dayRingStatus">Loading…</div>
-          <button type="button" class="ring-settings-btn" id="ringSettingsBtn" aria-label="Edit wake and sleep time">⚙</button>
+          <button type="button" class="ring-settings-btn" id="ringSettingsBtn"
+            aria-label="Edit wake and sleep time">⚙</button>
         </div>
         <div class="ring-remaining" id="dayRingRemaining">—</div>
         <div class="ring-hours" id="ringHoursLabel">8:00 AM – 12:00 AM window</div>
@@ -1028,7 +1030,8 @@
         </div>
         <div class="ltg-form-row">
           <label for="goalDirectionSelect">Goal direction</label>
-          <select id="goalDirectionSelect" style="background:rgba(0,0,0,0.30);border:1px solid var(--border);color:var(--t1);font-family:inherit;font-size:14px;padding:10px 12px;border-radius:10px;outline:none;cursor:pointer">
+          <select id="goalDirectionSelect"
+            style="background:rgba(0,0,0,0.30);border:1px solid var(--border);color:var(--t1);font-family:inherit;font-size:14px;padding:10px 12px;border-radius:10px;outline:none;cursor:pointer">
             <option value="up">Going up is progress (e.g. savings, reps)</option>
             <option value="down">Going down is progress (e.g. weight loss)</option>
           </select>
@@ -1096,31 +1099,38 @@
           }
         },
         {
-          href: 'health.html', emoji: '🌿', name: 'Wellness',
+          // FIX 7: Removed supplements fallback block entirely.
+          // The old code checked stack:items / stack:taken keys and returned sub:'supplements'
+          // when items existed — that feature is gone. Now we check for a journal entry
+          // written by health.html (key: journal:entry:YYYY-MM-DD) and show that instead.
+          // If health.html hasn't written a journal entry yet, falls back to wellness:done flag.
+          href: 'health.html', emoji: '📓', name: 'Journal',
           color: '#10B981',
           stat: () => {
             const today = getActiveDate();
-            let done = false;
-            try { done = !!JSON.parse(localStorage.getItem('wellness:done:' + today)); } catch {}
-            // fallback: also check old supplement keys so it doesn't break if health.html isn't updated yet
-            if (!done) {
-              try {
-                const items = JSON.parse(localStorage.getItem('stack:items')) || [];
-                const taken = JSON.parse(localStorage.getItem('stack:taken:' + today)) || {};
-                const takenCount = items.filter(i => i && taken[i.id]).length;
-                if (items.length > 0) {
-                  return { val: takenCount + '/' + items.length, sub: 'supplements' };
-                }
-              } catch {}
+
+            // Primary: check for a journal entry saved today (health.html writes this key)
+            let entry = null;
+            try { entry = JSON.parse(localStorage.getItem('journal:entry:' + today)); } catch { }
+            if (entry && (entry.text || entry.mood)) {
+              return { val: '✓ Logged', sub: 'journal today' };
             }
-            return { val: done ? '✓ Done' : '—', sub: 'wellness today' };
+
+            // Secondary: check generic wellness completion flag
+            let wellnessDone = false;
+            try { wellnessDone = !!JSON.parse(localStorage.getItem('wellness:done:' + today)); } catch { }
+            if (wellnessDone) {
+              return { val: '✓ Done', sub: 'wellness done' };
+            }
+
+            return { val: '—', sub: 'journal today' };
           }
         },
         {
           href: 'gym.html', emoji: '🏋️', name: 'Gym',
           color: '#F97316',
           stat: () => {
-            const dow = new Date().getDay(); // 0=Sun
+            const dow = new Date().getDay();
             const dayNames = { 1: 'Push', 2: 'Pull', 3: 'Legs', 4: 'Core' };
             const dayName = dayNames[dow] || 'Rest';
             let gymS = {}; try { gymS = JSON.parse(localStorage.getItem('ibrahim_gym_v1')) || {}; } catch { }
@@ -1208,8 +1218,6 @@
       function openTimeModal() {
         const s = getDaySettings();
         document.getElementById('wakeTimeInput').value = s.wake;
-        // FIX: was incorrectly setting '24:00' which browsers reject as invalid for time inputs.
-        // Midnight is stored as '00:00' and displayed as '00:00' — the ring handles next-day math internally.
         document.getElementById('sleepTimeInput').value = s.sleep;
         document.getElementById('timeModalBg').classList.add('show');
       }
@@ -1258,7 +1266,6 @@
         const settings = getDaySettings();
         let WAKE_HOUR = timeStrToHours(settings.wake);
         let SLEEP_HOUR = timeStrToHours(settings.sleep);
-        // If sleep <= wake, sleep is next day (e.g. wake 8am, sleep midnight = 24h)
         if (SLEEP_HOUR <= WAKE_HOUR) SLEEP_HOUR += 24;
 
         const pEl = document.getElementById('dayRingPercent');
@@ -1274,7 +1281,6 @@
         ckEl.textContent = fmtClock(now);
         hlEl.textContent = fmtHourLabel(WAKE_HOUR) + ' – ' + fmtHourLabel(SLEEP_HOUR) + ' window';
 
-        // Before wake time → sleeping
         if (trueNowHours < WAKE_HOUR && WAKE_HOUR !== 0) {
           fillEl.setAttribute('stroke-dashoffset', C);
           fillEl.style.stroke = '#2D3748';
@@ -1285,11 +1291,9 @@
           return;
         }
 
-        // Compute adjusted hours for ring progress (handles post-midnight stays-up scenario)
         let hours = trueNowHours;
-        if (hours < WAKE_HOUR) hours += 24; // shouldn't hit here after the check above, but safety net
+        if (hours < WAKE_HOUR) hours += 24;
 
-        // Past sleep time → bedtime
         if (hours >= SLEEP_HOUR) {
           fillEl.setAttribute('stroke-dashoffset', 0);
           fillEl.style.stroke = '#6B21A8';
@@ -1300,7 +1304,6 @@
           return;
         }
 
-        // Normal ring progress
         const span = SLEEP_HOUR - WAKE_HOUR;
         const pct = (hours - WAKE_HOUR) / span * 100;
         fillEl.setAttribute('stroke-dashoffset', C * (1 - pct / 100));
